@@ -1,180 +1,100 @@
 import tkinter as tk
-from tkinter import messagebox, ttk
-import sqlite3
-import bcrypt
+from tkinter import messagebox
+import random
 
-# Izveido datu bāzi
-conn = sqlite3.connect("expenses.db")
-cursor = conn.cursor()
+# Pieejamie vārdi spēlei
+WORDS = ["python", "tkinter", "programming", "developer", "hangman", "interface", "widget", "function"]
 
-# Tabulu izveide
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT NOT NULL UNIQUE,
-    password TEXT NOT NULL
-)
-""")
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS expenses (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    category TEXT NOT NULL,
-    amount REAL NOT NULL,
-    date TEXT NOT NULL,
-    FOREIGN KEY (user_id) REFERENCES users (id)
-)
-""")
-conn.commit()
-
-# Funkcija paroles hashēšanai
-def hash_password(password):
-    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-
-# Funkcija paroles pārbaudei
-def verify_password(password, hashed):
-    return bcrypt.checkpw(password.encode('utf-8'), hashed)
-
-# Galvenā lietotnes klase
-class ExpenseTrackerApp:
+class WordGuessGame:
     def __init__(self, root):
         self.root = root
-        self.root.title("Expense Tracker")
-        self.current_user = None
+        self.root.title("Guess the Word Game")
 
-        # Izsauc sākuma logu
-        self.login_screen()
+        # Spēles mainīgie
+        self.secret_word = random.choice(WORDS)
+        self.guessed_word = ["_"] * len(self.secret_word)
+        self.remaining_attempts = 6
+        self.used_letters = set()
 
-    def login_screen(self):
-        self.clear_screen()
+        # GUI veidošana
+        self.create_widgets()
 
-        tk.Label(self.root, text="Expense Tracker Login", font=("Arial", 16)).pack(pady=10)
+    def create_widgets(self):
+        # Galvenais virsraksts
+        tk.Label(self.root, text="Guess the Word!", font=("Arial", 20)).pack(pady=10)
 
-        tk.Label(self.root, text="Username").pack()
-        self.username_entry = tk.Entry(self.root)
-        self.username_entry.pack()
+        # Rāda uzminētos burtus
+        self.word_label = tk.Label(self.root, text=" ".join(self.guessed_word), font=("Arial", 18))
+        self.word_label.pack(pady=10)
 
-        tk.Label(self.root, text="Password").pack()
-        self.password_entry = tk.Entry(self.root, show="*")
-        self.password_entry.pack()
+        # Ievades lauks burtam
+        tk.Label(self.root, text="Enter a letter:").pack()
+        self.letter_entry = tk.Entry(self.root, font=("Arial", 14), width=5)
+        self.letter_entry.pack()
 
-        tk.Button(self.root, text="Login", command=self.login).pack(pady=5)
-        tk.Button(self.root, text="Register", command=self.register_screen).pack()
+        # Poga burtu pārbaudei
+        self.check_button = tk.Button(self.root, text="Check", font=("Arial", 14), command=self.check_letter)
+        self.check_button.pack(pady=10)
 
-    def register_screen(self):
-        self.clear_screen()
+        # Rāda atlikušo mēģinājumu skaitu
+        self.attempts_label = tk.Label(self.root, text=f"Remaining attempts: {self.remaining_attempts}", font=("Arial", 14))
+        self.attempts_label.pack(pady=10)
 
-        tk.Label(self.root, text="Register", font=("Arial", 16)).pack(pady=10)
+        # Rāda izmantotos burtus
+        self.used_letters_label = tk.Label(self.root, text="Used letters: ", font=("Arial", 12))
+        self.used_letters_label.pack()
 
-        tk.Label(self.root, text="Username").pack()
-        self.username_entry = tk.Entry(self.root)
-        self.username_entry.pack()
+    def check_letter(self):
+        # Iegūst ievadīto burtu
+        letter = self.letter_entry.get().lower()
+        self.letter_entry.delete(0, tk.END)  # Notīra ievades lauku
 
-        tk.Label(self.root, text="Password").pack()
-        self.password_entry = tk.Entry(self.root, show="*")
-        self.password_entry.pack()
-
-        tk.Button(self.root, text="Register", command=self.register).pack(pady=5)
-        tk.Button(self.root, text="Back to Login", command=self.login_screen).pack()
-
-    def main_screen(self):
-        self.clear_screen()
-
-        tk.Label(self.root, text=f"Welcome, {self.current_user}", font=("Arial", 16)).pack(pady=10)
-
-        tk.Button(self.root, text="Add Expense", command=self.add_expense_screen).pack(pady=5)
-        tk.Button(self.root, text="View Expenses", command=self.view_expenses_screen).pack(pady=5)
-        tk.Button(self.root, text="Logout", command=self.login_screen).pack(pady=5)
-
-    def add_expense_screen(self):
-        self.clear_screen()
-
-        tk.Label(self.root, text="Add Expense", font=("Arial", 16)).pack(pady=10)
-
-        tk.Label(self.root, text="Category").pack()
-        self.category_entry = tk.Entry(self.root)
-        self.category_entry.pack()
-
-        tk.Label(self.root, text="Amount").pack()
-        self.amount_entry = tk.Entry(self.root)
-        self.amount_entry.pack()
-
-        tk.Button(self.root, text="Add", command=self.add_expense).pack(pady=5)
-        tk.Button(self.root, text="Back", command=self.main_screen).pack()
-
-    def view_expenses_screen(self):
-        self.clear_screen()
-
-        tk.Label(self.root, text="Your Expenses", font=("Arial", 16)).pack(pady=10)
-
-        tree = ttk.Treeview(self.root, columns=("Category", "Amount", "Date"), show="headings")
-        tree.heading("Category", text="Category")
-        tree.heading("Amount", text="Amount")
-        tree.heading("Date", text="Date")
-        tree.pack()
-
-        cursor.execute("SELECT category, amount, date FROM expenses WHERE user_id = ?", (self.current_user_id,))
-        for row in cursor.fetchall():
-            tree.insert("", "end", values=row)
-
-        tk.Button(self.root, text="Back", command=self.main_screen).pack(pady=5)
-
-    def register(self):
-        username = self.username_entry.get()
-        password = self.password_entry.get()
-
-        if not username or not password:
-            messagebox.showerror("Error", "All fields are required!")
+        # Validācija
+        if not letter.isalpha() or len(letter) != 1:
+            messagebox.showerror("Error", "Please enter a single letter!")
+            return
+        if letter in self.used_letters:
+            messagebox.showerror("Error", "You already used this letter!")
             return
 
-        hashed_password = hash_password(password)
+        # Pievieno burtu izmantotajiem burtiem
+        self.used_letters.add(letter)
+        self.used_letters_label.config(text=f"Used letters: {', '.join(self.used_letters)}")
 
-        try:
-            cursor.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, hashed_password))
-            conn.commit()
-            messagebox.showinfo("Success", "Registration successful! Please login.")
-            self.login_screen()
-        except sqlite3.IntegrityError:
-            messagebox.showerror("Error", "Username already exists!")
+        # Pārbauda, vai burts ir vārdā
+        if letter in self.secret_word:
+            for i, char in enumerate(self.secret_word):
+                if char == letter:
+                    self.guessed_word[i] = letter
+            self.word_label.config(text=" ".join(self.guessed_word))
 
-    def login(self):
-        username = self.username_entry.get()
-        password = self.password_entry.get()
-
-        cursor.execute("SELECT id, password FROM users WHERE username = ?", (username,))
-        user = cursor.fetchone()
-
-        if user and verify_password(password, user[1]):
-            self.current_user = username
-            self.current_user_id = user[0]
-            self.main_screen()
+            # Uzvaras pārbaude
+            if "_" not in self.guessed_word:
+                messagebox.showinfo("Congratulations!", f"You guessed the word: {self.secret_word}")
+                self.reset_game()
         else:
-            messagebox.showerror("Error", "Invalid username or password!")
+            self.remaining_attempts -= 1
+            self.attempts_label.config(text=f"Remaining attempts: {self.remaining_attempts}")
 
-    def add_expense(self):
-        category = self.category_entry.get()
-        amount = self.amount_entry.get()
+            # Zaudējuma pārbaude
+            if self.remaining_attempts == 0:
+                messagebox.showinfo("Game Over", f"You lost! The word was: {self.secret_word}")
+                self.reset_game()
 
-        if not category or not amount:
-            messagebox.showerror("Error", "All fields are required!")
-            return
+    def reset_game(self):
+        # Atiestata spēli
+        self.secret_word = random.choice(WORDS)
+        self.guessed_word = ["_"] * len(self.secret_word)
+        self.remaining_attempts = 6
+        self.used_letters = set()
 
-        try:
-            amount = float(amount)
-            cursor.execute("INSERT INTO expenses (user_id, category, amount, date) VALUES (?, ?, ?, date('now'))",
-                           (self.current_user_id, category, amount))
-            conn.commit()
-            messagebox.showinfo("Success", "Expense added successfully!")
-            self.main_screen()
-        except ValueError:
-            messagebox.showerror("Error", "Amount must be a number!")
+        # Atjauno GUI
+        self.word_label.config(text=" ".join(self.guessed_word))
+        self.attempts_label.config(text=f"Remaining attempts: {self.remaining_attempts}")
+        self.used_letters_label.config(text="Used letters: ")
 
-    def clear_screen(self):
-        for widget in self.root.winfo_children():
-            widget.destroy()
-
-# Lietotnes palaišana
+# Palaid spēli
 if __name__ == "__main__":
     root = tk.Tk()
-    app = ExpenseTrackerApp(root)
+    game = WordGuessGame(root)
     root.mainloop()
